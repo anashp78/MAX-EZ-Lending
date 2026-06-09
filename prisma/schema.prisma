@@ -1,0 +1,203 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  name        String
+  domain      String?  @unique
+  logoUrl     String?
+  primaryColor String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users        User[]
+  applications Application[]
+  ragDocuments RagDocument[]
+  auditLogs    AuditLog[]
+}
+
+model User {
+  id           String   @id @default(cuid())
+  tenantId     String
+  email        String
+  passwordHash String
+  name         String?
+  role         String   @default("applicant") // applicant | staff | admin
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id])
+  applications Application[]
+  auditLogs    AuditLog[]
+
+  @@unique([tenantId, email])
+}
+
+model Application {
+  id            String   @id @default(cuid())
+  tenantId      String
+  userId        String?
+  status        String   @default("draft") // draft | submitted | under_review | approved | declined | manual_review
+
+  // Business info
+  businessName        String?
+  businessType        String?  // LLC | Corporation | Sole Proprietorship | Partnership
+  naicsCode           String?
+  businessState       String?
+  yearsInBusiness     Int?
+  annualRevenue       Float?
+  employeeCount       Int?
+
+  // Owner info
+  applicantName       String?
+  applicantEmail      String?
+  applicantPhone      String?
+  ssnEncrypted        String?  // AES-256
+
+  // Loan request
+  loanAmount          Float?
+  loanPurpose         String?
+
+  // AI scoring
+  aiScore             Int?
+  aiScoreBreakdown    Json?
+  aiRecommendation    String?  // lendio | kapitus | manual_review | decline
+
+  // Routing
+  affiliateRouted     String?  // lendio | kapitus
+  affiliateRefId      String?
+
+  // Salesforce
+  sfLeadId            String?
+  sfOpportunityId     String?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  submittedAt DateTime?
+
+  tenant     Tenant      @relation(fields: [tenantId], references: [id])
+  user       User?       @relation(fields: [userId], references: [id])
+  plaidData  PlaidData?
+  agentRuns  AgentRun[]
+  documents  ApplicationDocument[]
+  affiliateRoutes AffiliateRoute[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, createdAt])
+}
+
+model PlaidData {
+  id              String   @id @default(cuid())
+  applicationId   String   @unique
+  accessTokenEnc  String   // AES-256 encrypted
+  institutionName String?
+
+  // Computed cash flow metrics
+  avgMonthlyDeposits    Float?
+  avgMonthlyWithdrawals Float?
+  nsfCount              Int?
+  volatilityScore       Float?
+  monthsAnalyzed        Int?
+
+  rawAnalysis         Json?  // full output from plaid_analysis tool
+  fetchedAt           DateTime @default(now())
+
+  application Application @relation(fields: [applicationId], references: [id])
+}
+
+model AgentRun {
+  id            String   @id @default(cuid())
+  applicationId String
+  runId         String   @unique @default(cuid())
+  status        String   @default("pending") // pending | running | completed | failed
+
+  toolSequence  Json?    // array of {tool, input, output, durationMs}
+  finalScore    Int?
+  finalRec      String?
+  errorMessage  String?
+
+  startedAt   DateTime @default(now())
+  completedAt DateTime?
+  durationMs  Int?
+
+  application Application @relation(fields: [applicationId], references: [id])
+
+  @@index([applicationId])
+}
+
+model RagDocument {
+  id          String   @id @default(cuid())
+  tenantId    String?  // null = global (all tenants)
+  title       String
+  source      String   // sba_7a | sba_eligibility | sba_sop | lendio_terms | kapitus_guide | naics_risk | internal
+  content     String
+  chunkCount  Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  tenant Tenant?    @relation(fields: [tenantId], references: [id])
+  chunks RagChunk[]
+}
+
+model RagChunk {
+  id         String   @id @default(cuid())
+  documentId String
+  chunkIndex Int
+  content    String
+  embedding  Unsupported("vector(1536)")?
+
+  document RagDocument @relation(fields: [documentId], references: [id])
+
+  @@index([documentId])
+}
+
+model ApplicationDocument {
+  id            String   @id @default(cuid())
+  applicationId String
+  type          String   // bank_statement | tax_return | business_license | id | other
+  fileName      String
+  filePath      String
+  mimeType      String?
+  sizeBytes     Int?
+  uploadedAt    DateTime @default(now())
+
+  application Application @relation(fields: [applicationId], references: [id])
+}
+
+model AffiliateRoute {
+  id            String   @id @default(cuid())
+  applicationId String
+  affiliate     String   // lendio | kapitus
+  submittedAt   DateTime @default(now())
+  responseCode  Int?
+  responseBody  Json?
+  referenceId   String?
+  status        String   @default("submitted") // submitted | accepted | rejected | pending
+
+  application Application @relation(fields: [applicationId], references: [id])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  tenantId   String
+  userId     String?
+  action     String
+  entityType String?
+  entityId   String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  user   User?  @relation(fields: [userId], references: [id])
+
+  @@index([tenantId, createdAt])
+  @@index([entityType, entityId])
+}
