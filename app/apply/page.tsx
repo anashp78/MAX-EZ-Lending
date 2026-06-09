@@ -7,14 +7,29 @@ const STEPS = [
   { id: 'business', label: 'Business' },
   { id: 'owner', label: 'Owner' },
   { id: 'loan', label: 'Loan' },
-  { id: 'bank', label: 'Bank Link' },
+  { id: 'financial', label: 'Financial' },
+]
+
+const NSF_OPTIONS = [
+  { value: '0', label: 'None (0)' },
+  { value: '1-3', label: '1 - 3 times' },
+  { value: '4-10', label: '4 - 10 times' },
+  { value: '10+', label: 'More than 10' },
+]
+
+const CREDIT_OPTIONS = [
+  { value: '720_plus', label: '720+ (Excellent)' },
+  { value: '680_719', label: '680 - 719 (Good)' },
+  { value: '620_679', label: '620 - 679 (Fair)' },
+  { value: '580_619', label: '580 - 619 (Below Average)' },
+  { value: 'below_580', label: 'Below 580' },
 ]
 
 export default function ApplyPage() {
   const router = useRouter()
   const [step, setStep] = useState(0)
   const [loading, setLoading] = useState(false)
-  const [applicationId, setApplicationId] = useState<string | null>(null)
+  const [error, setError] = useState('')
 
   const [form, setForm] = useState({
     businessName: '',
@@ -29,34 +44,48 @@ export default function ApplyPage() {
     applicantPhone: '',
     loanAmount: '',
     loanPurpose: '',
+    monthlyRevenue: '',
+    avgDailyBalance: '',
+    monthlyExpenses: '',
+    outstandingDebt: '',
+    nsfRange: '0',
+    creditScoreRange: '620_679',
   })
 
   const update = (field: string, value: string) => setForm(f => ({ ...f, [field]: value }))
 
   async function submitApplication() {
     setLoading(true)
-    const res = await fetch('/api/applications', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ...form,
-        yearsInBusiness: form.yearsInBusiness ? Number(form.yearsInBusiness) : undefined,
-        annualRevenue: form.annualRevenue ? Number(form.annualRevenue) : undefined,
-        employeeCount: form.employeeCount ? Number(form.employeeCount) : undefined,
-        loanAmount: Number(form.loanAmount),
-      }),
-    })
-    const data = await res.json()
-    setLoading(false)
-    if (res.ok) {
-      setApplicationId(data.applicationId)
-      setStep(3)
+    setError('')
+    try {
+      const res = await fetch('/api/applications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...form,
+          yearsInBusiness: form.yearsInBusiness ? Number(form.yearsInBusiness) : undefined,
+          annualRevenue: form.annualRevenue ? Number(form.annualRevenue) : undefined,
+          employeeCount: form.employeeCount ? Number(form.employeeCount) : undefined,
+          loanAmount: Number(form.loanAmount),
+          monthlyRevenue: form.monthlyRevenue ? Number(form.monthlyRevenue) : undefined,
+          avgDailyBalance: form.avgDailyBalance ? Number(form.avgDailyBalance) : undefined,
+          monthlyExpenses: form.monthlyExpenses ? Number(form.monthlyExpenses) : undefined,
+          outstandingDebt: form.outstandingDebt ? Number(form.outstandingDebt) : undefined,
+          nsfRange: form.nsfRange,
+          creditScoreRange: form.creditScoreRange,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setError('Something went wrong. Please check your information and try again.')
+        setLoading(false)
+        return
+      }
+      router.push(`/apply/decision?id=${data.applicationId}`)
+    } catch {
+      setError('Network error. Please try again.')
+      setLoading(false)
     }
-  }
-
-  function runAgent() {
-    if (!applicationId) return
-    router.push(`/apply/decision?id=${applicationId}`)
   }
 
   const inputClass = 'w-full border border-slate-200 rounded-lg px-4 py-2.5 text-slate-900 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent placeholder:text-slate-400 transition-all'
@@ -72,7 +101,7 @@ export default function ApplyPage() {
             </div>
             <span className="font-semibold text-slate-900 text-sm">MAX EV Business Lending</span>
           </Link>
-          <span className="text-slate-400 text-xs hidden sm:block">256-bit SSL encryption &bull; Powered by Plaid</span>
+          <span className="text-slate-400 text-xs hidden sm:block">256-bit SSL encryption &bull; No credit pull</span>
         </div>
       </header>
 
@@ -110,13 +139,13 @@ export default function ApplyPage() {
             {step === 0 && 'Business Information'}
             {step === 1 && 'Owner Information'}
             {step === 2 && 'Loan Details'}
-            {step === 3 && 'Connect Your Bank'}
+            {step === 3 && 'Financial Profile'}
           </h1>
           <p className="text-slate-500 text-sm mb-7">
             {step === 0 && 'Tell us about the business applying for funding.'}
             {step === 1 && 'We need basic information about the primary owner.'}
             {step === 2 && 'How much do you need, and what for?'}
-            {step === 3 && 'Securely link your business bank account to complete the analysis.'}
+            {step === 3 && 'Help our AI understand your financial health. All fields are estimates.'}
           </p>
 
           <div className="space-y-5">
@@ -187,55 +216,68 @@ export default function ApplyPage() {
             )}
 
             {step === 3 && (
-              <div className="text-center py-4">
-                <div className="w-16 h-16 bg-emerald-50 rounded-2xl flex items-center justify-center mx-auto mb-5 ring-1 ring-emerald-100">
-                  <svg className="w-8 h-8 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-                  </svg>
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <Field label="Monthly Revenue ($)" required>
+                    <input className={inputClass} type="number" value={form.monthlyRevenue} onChange={e => update('monthlyRevenue', e.target.value)} placeholder="25000" />
+                  </Field>
+                  <Field label="Avg Daily Balance ($)">
+                    <input className={inputClass} type="number" value={form.avgDailyBalance} onChange={e => update('avgDailyBalance', e.target.value)} placeholder="15000" />
+                  </Field>
                 </div>
-                <h2 className="text-base font-semibold text-slate-900 mb-2">Bank-Grade Security via Plaid</h2>
-                <p className="text-slate-500 text-sm mb-2 leading-relaxed max-w-xs mx-auto">
-                  Link your business checking account so our AI can analyze 12 months of cash flow. Your login credentials are never stored.
-                </p>
-                <div className="flex items-center justify-center gap-4 text-xs text-slate-400 mb-6">
-                  <span>256-bit SSL</span>
-                  <span>&bull;</span>
-                  <span>Read-only access</span>
-                  <span>&bull;</span>
-                  <span>Sandbox mode</span>
+                <div className="grid grid-cols-2 gap-4">
+                  <Field label="Monthly Expenses ($)">
+                    <input className={inputClass} type="number" value={form.monthlyExpenses} onChange={e => update('monthlyExpenses', e.target.value)} placeholder="18000" />
+                  </Field>
+                  <Field label="Outstanding Debt ($)">
+                    <input className={inputClass} type="number" value={form.outstandingDebt} onChange={e => update('outstandingDebt', e.target.value)} placeholder="0" />
+                  </Field>
                 </div>
-                <button
-                  onClick={runAgent}
-                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3 rounded-xl transition-colors text-sm"
-                >
-                  Get My Decision Now
-                </button>
-              </div>
+                <Field label="NSF / Returned Checks (last 12 months)">
+                  <select className={inputClass} value={form.nsfRange} onChange={e => update('nsfRange', e.target.value)}>
+                    {NSF_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                </Field>
+                <Field label="Estimated Personal Credit Score">
+                  <select className={inputClass} value={form.creditScoreRange} onChange={e => update('creditScoreRange', e.target.value)}>
+                    {CREDIT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                </Field>
+                <div className="bg-slate-50 rounded-lg px-4 py-3 text-xs text-slate-500">
+                  All figures are estimates used for pre-qualification only. No credit pull will occur at this stage.
+                </div>
+              </>
             )}
           </div>
 
-          {step < 3 && (
-            <div className="flex gap-3 mt-8 pt-6 border-t border-slate-100">
-              {step > 0 && (
-                <button
-                  onClick={() => setStep(s => s - 1)}
-                  className="flex-1 border border-slate-200 text-slate-700 py-2.5 rounded-xl hover:bg-slate-50 text-sm font-medium transition-colors"
-                >
-                  Back
-                </button>
-              )}
-              <button
-                onClick={() => {
-                  if (step === 2) submitApplication()
-                  else setStep(s => s + 1)
-                }}
-                disabled={loading}
-                className="flex-1 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white font-semibold py-2.5 rounded-xl text-sm transition-colors"
-              >
-                {loading ? 'Saving...' : step === 2 ? 'Save & Continue' : 'Continue'}
-              </button>
+          {error && (
+            <div className="mt-5 bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-lg">
+              {error}
             </div>
           )}
+
+          <div className="flex gap-3 mt-8 pt-6 border-t border-slate-100">
+            {step > 0 && (
+              <button
+                onClick={() => setStep(s => s - 1)}
+                className="flex-1 border border-slate-200 text-slate-700 py-2.5 rounded-xl hover:bg-slate-50 text-sm font-medium transition-colors"
+              >
+                Back
+              </button>
+            )}
+            <button
+              onClick={() => {
+                if (step === 3) submitApplication()
+                else setStep(s => s + 1)
+              }}
+              disabled={loading}
+              className={`flex-1 disabled:opacity-50 text-white font-semibold py-2.5 rounded-xl text-sm transition-colors ${
+                step === 3 ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-slate-900 hover:bg-slate-800'
+              }`}
+            >
+              {loading ? 'Analyzing...' : step === 3 ? 'Get My Decision' : 'Continue'}
+            </button>
+          </div>
         </div>
 
         <p className="text-center text-slate-400 text-xs mt-5">

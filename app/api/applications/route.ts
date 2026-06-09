@@ -4,6 +4,7 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { getTenantFromRequest } from '@/lib/tenant'
 import { encrypt } from '@/lib/encryption'
+import { sendAdminNewApplicationEmail } from '@/lib/email'
 import { z } from 'zod'
 
 const CreateSchema = z.object({
@@ -20,6 +21,13 @@ const CreateSchema = z.object({
   ssn: z.string().regex(/^\d{9}$/).optional(),
   loanAmount: z.number().positive(),
   loanPurpose: z.string().optional(),
+  // Financial questionnaire
+  monthlyRevenue: z.number().positive().optional(),
+  avgDailyBalance: z.number().min(0).optional(),
+  monthlyExpenses: z.number().min(0).optional(),
+  outstandingDebt: z.number().min(0).optional(),
+  nsfRange: z.enum(['0', '1-3', '4-10', '10+']).optional(),
+  creditScoreRange: z.enum(['below_580', '580_619', '620_679', '680_719', '720_plus']).optional(),
 })
 
 export async function POST(req: NextRequest) {
@@ -32,6 +40,23 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
 
   const data = parsed.data
+
+  // Duplicate detection — block if active application exists for this email
+  const existing = await prisma.application.findFirst({
+    where: {
+      tenantId: tenant.id,
+      applicantEmail: data.applicantEmail,
+      status: { in: ['submitted', 'under_review', 'approved', 'funded'] },
+    },
+    select: { id: true, status: true },
+  })
+  if (existing) {
+    return NextResponse.json(
+      { error: 'An active application already exists for this email address. Please contact us if you need assistance.' },
+      { status: 409 }
+    )
+  }
+
   const application = await prisma.application.create({
     data: {
       tenantId: tenant.id,
@@ -49,9 +74,18 @@ export async function POST(req: NextRequest) {
       ssnEncrypted: data.ssn ? encrypt(data.ssn) : undefined,
       loanAmount: data.loanAmount,
       loanPurpose: data.loanPurpose,
-      status: 'draft',
+      monthlyRevenue: data.monthlyRevenue,
+      avgDailyBalance: data.avgDailyBalance,
+      monthlyExpenses: data.monthlyExpenses,
+      outstandingDebt: data.outstandingDebt,
+      nsfRange: data.nsfRange,
+      creditScoreRange: data.creditScoreRange,
+      status: 'submitted',
     },
   })
+
+  // Fire-and-forget admin notification (non-blocking)
+  sendAdminNewApplicationEmail(application).catch(() => {})
 
   return NextResponse.json({ applicationId: application.id }, { status: 201 })
 }

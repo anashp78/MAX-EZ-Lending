@@ -67,6 +67,14 @@ model Application {
   loanAmount          Float?
   loanPurpose         String?
 
+  // Financial questionnaire (replaces Plaid)
+  monthlyRevenue      Float?
+  avgDailyBalance     Float?
+  monthlyExpenses     Float?
+  outstandingDebt     Float?
+  nsfRange            String?  // 0 | 1-3 | 4-10 | 10+
+  creditScoreRange    String?  // below_580 | 580_619 | 620_679 | 680_719 | 720_plus
+
   // AI scoring
   aiScore             Int?
   aiScoreBreakdown    Json?
@@ -75,6 +83,9 @@ model Application {
   // Routing
   affiliateRouted     String?  // lendio | kapitus
   affiliateRefId      String?
+
+  // Admin
+  notes               String?
 
   // Salesforce
   sfLeadId            String?

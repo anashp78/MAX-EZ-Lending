@@ -58,6 +58,8 @@ export interface ScoreBreakdown {
   total: number            // 0-100
   recommendation: 'lendio' | 'kapitus' | 'manual_review' | 'decline'
   reasoning: string
+  qualifiedAmountMin: number
+  qualifiedAmountMax: number
 }
 
 export interface AffiliateRouteResult {

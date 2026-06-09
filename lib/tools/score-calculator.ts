@@ -52,5 +52,21 @@ export function calculateScore(
 
   const reasoning = `Score ${total}/100. Cash flow DSCR ${dscr.toFixed(2)} (${cashFlow}/20), business age ${years}yr (${businessHistory}/20), industry default rate ${(benchmark.defaultRate * 100).toFixed(1)}% (${industryRisk}/20), loan viability (${loanViability}/15), compliance (${complianceFlags}/10). Recommendation: ${recommendation.toUpperCase()}.`
 
-  return { cashFlow, creditProxy, businessHistory, industryRisk, loanViability, complianceFlags, total, recommendation, reasoning }
+  // Qualified amount based on monthly revenue and score band
+  const monthlyRev = plaid.avgMonthlyDeposits
+  let qualifiedAmountMin = 0
+  let qualifiedAmountMax = 0
+  if (total >= 70) {
+    qualifiedAmountMin = Math.round((monthlyRev * 3) / 1000) * 1000
+    qualifiedAmountMax = Math.min(ctx.loanAmount, Math.round((monthlyRev * 12) / 1000) * 1000)
+  } else if (total >= 55) {
+    qualifiedAmountMin = Math.round((monthlyRev * 2) / 1000) * 1000
+    qualifiedAmountMax = Math.min(ctx.loanAmount, Math.round((monthlyRev * 6) / 1000) * 1000)
+  } else if (total >= 40) {
+    qualifiedAmountMin = Math.round(monthlyRev / 1000) * 1000
+    qualifiedAmountMax = Math.min(ctx.loanAmount, Math.round((monthlyRev * 3) / 1000) * 1000)
+  }
+  qualifiedAmountMax = Math.max(qualifiedAmountMin, qualifiedAmountMax)
+
+  return { cashFlow, creditProxy, businessHistory, industryRisk, loanViability, complianceFlags, total, recommendation, reasoning, qualifiedAmountMin, qualifiedAmountMax }
 }

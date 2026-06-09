@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { prisma } from '@/lib/db'
-import { analyzePlaidData } from '@/lib/tools/plaid-analysis'
+import { analyzeQuestionnaire } from '@/lib/tools/questionnaire-analysis'
+import { sendApplicantResultEmail } from '@/lib/email'
 import { getIndustryBenchmarks } from '@/lib/tools/snowflake-benchmarks'
 import { getSbaHistory } from '@/lib/tools/sba-history'
 import { ragSearch } from '@/lib/tools/rag-search'
@@ -17,8 +18,8 @@ function getClient() {
 
 const TOOLS: Anthropic.Tool[] = [
   {
-    name: 'plaid_analysis',
-    description: 'Analyze 12 months of bank transaction data via Plaid. Returns cash flow metrics, NSF count, volatility score.',
+    name: 'questionnaire_analysis',
+    description: 'Analyze the applicant financial questionnaire — monthly revenue, expenses, daily balance, NSF history, and credit score range. Returns cash flow metrics shaped for underwriting.',
     input_schema: {
       type: 'object' as const,
       properties: { application_id: { type: 'string' } },
@@ -112,7 +113,7 @@ export async function runUnderwritingAgent(
   const toolCalls: AgentToolCall[] = []
 
   // Track intermediate results
-  let plaidResult: Awaited<ReturnType<typeof analyzePlaidData>> | null = null
+  let plaidResult: Awaited<ReturnType<typeof analyzeQuestionnaire>> | null = null
   let benchmarkResult: Awaited<ReturnType<typeof getIndustryBenchmarks>> | null = null
   let sbaResult: Awaited<ReturnType<typeof getSbaHistory>> | null = null
   let ragResult: Awaited<ReturnType<typeof ragSearch>> | null = null
@@ -121,10 +122,10 @@ export async function runUnderwritingAgent(
 
   const application = await prisma.application.findUnique({ where: { id: ctx.applicationId }, include: { plaidData: true } })
 
-  const systemPrompt = `You are an AI lending underwriter for EZ Lending. Your job is to assess a small business loan application and produce a credit decision.
+  const systemPrompt = `You are an AI lending underwriter for MAX EV Business Lending. Your job is to assess a small business loan application and produce a credit decision.
 
 You MUST call these tools in this exact sequence:
-1. plaid_analysis — get cash flow data
+1. questionnaire_analysis — analyze the applicant's financial profile
 2. snowflake_benchmarks — get industry data
 3. sba_history_lookup — get comparable SBA loans
 4. rag_search — check guidelines/compliance
@@ -179,7 +180,7 @@ Application ID: ${ctx.applicationId}`
         })
 
         // Cache results for downstream tools
-        if (block.name === 'plaid_analysis') plaidResult = output as unknown as Awaited<ReturnType<typeof analyzePlaidData>>
+        if (block.name === 'questionnaire_analysis') plaidResult = output as unknown as Awaited<ReturnType<typeof analyzeQuestionnaire>>
         if (block.name === 'snowflake_benchmarks') benchmarkResult = output as unknown as Awaited<ReturnType<typeof getIndustryBenchmarks>>
         if (block.name === 'sba_history_lookup') sbaResult = output as unknown as Awaited<ReturnType<typeof getSbaHistory>>
         if (block.name === 'rag_search') ragResult = output as unknown as Awaited<ReturnType<typeof ragSearch>>
@@ -241,6 +242,21 @@ Application ID: ${ctx.applicationId}`
     })
   }
 
+  // Fire-and-forget applicant result email
+  if (scoreResult) {
+    const appForEmail = await prisma.application.findUnique({
+      where: { id: ctx.applicationId },
+      select: { applicantName: true, applicantEmail: true, id: true, aiScore: true, aiRecommendation: true },
+    })
+    if (appForEmail) {
+      sendApplicantResultEmail({
+        ...appForEmail,
+        qualifiedAmountMin: scoreResult.qualifiedAmountMin,
+        qualifiedAmountMax: scoreResult.qualifiedAmountMax,
+      }).catch(() => {})
+    }
+  }
+
   emit({ type: 'complete', runId })
 
   return {
@@ -261,10 +277,8 @@ async function dispatchTool(
   cache: { plaidResult: unknown; benchmarkResult: unknown; sbaResult: unknown; ragResult: unknown }
 ): Promise<Record<string, unknown>> {
   switch (name) {
-    case 'plaid_analysis': {
-      const app = application as { plaidData?: { accessTokenEnc?: string } } | null
-      if (!app?.plaidData?.accessTokenEnc) return { error: 'No Plaid access token on file — skip to mock data', avgMonthlyDeposits: ctx.annualRevenue ? ctx.annualRevenue / 12 : 10000, avgMonthlyWithdrawals: ctx.annualRevenue ? ctx.annualRevenue / 14 : 8000, nsfCount: 0, volatilityScore: 0.15, monthsAnalyzed: 12, cashFlowTrend: 'stable', summary: 'Mock: No Plaid data, using revenue estimate.' }
-      const result = await analyzePlaidData(app.plaidData.accessTokenEnc)
+    case 'questionnaire_analysis': {
+      const result = await analyzeQuestionnaire(ctx.applicationId)
       return result as unknown as Record<string, unknown>
     }
     case 'snowflake_benchmarks': {

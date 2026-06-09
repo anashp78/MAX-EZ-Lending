@@ -1,10 +1,13 @@
 'use client'
-import { Suspense, useEffect, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import dynamic from 'next/dynamic'
+
+const DecisionChat = dynamic(() => import('@/components/DecisionChat'), { ssr: false })
 
 const TOOL_LABELS: Record<string, string> = {
-  plaid_analysis: 'Analyzing bank transactions',
+  questionnaire_analysis: 'Reviewing financial profile',
   snowflake_benchmarks: 'Fetching industry benchmarks',
   sba_history_lookup: 'Reviewing SBA loan history',
   rag_search: 'Checking lending guidelines',
@@ -14,7 +17,7 @@ const TOOL_LABELS: Record<string, string> = {
 }
 
 const TOOL_DETAIL: Record<string, string> = {
-  plaid_analysis: '12 months of cash flow',
+  questionnaire_analysis: 'Income, expenses, credit profile',
   snowflake_benchmarks: 'SBA industry database',
   sba_history_lookup: 'Historical loan outcomes',
   rag_search: 'Policy and compliance check',
@@ -69,6 +72,13 @@ const SCORE_DIMS = [
   { label: 'Compliance', key: 'complianceFlags', max: 10 },
 ]
 
+const DOC_TYPE_OPTIONS = [
+  { value: 'bank_statement', label: 'Bank Statement' },
+  { value: 'tax_return', label: 'Tax Return' },
+  { value: 'business_license', label: 'Business License' },
+  { value: 'other', label: 'Other Document' },
+]
+
 function DecisionContent() {
   const params = useSearchParams()
   const applicationId = params.get('id')
@@ -77,6 +87,13 @@ function DecisionContent() {
   const [score, setScore] = useState<Record<string, number | string> | null>(null)
   const [done, setDone] = useState(false)
   const [error, setError] = useState('')
+
+  // Upload state
+  const [docType, setDocType] = useState('bank_statement')
+  const [uploadLoading, setUploadLoading] = useState(false)
+  const [uploadError, setUploadError] = useState('')
+  const [uploadedDocs, setUploadedDocs] = useState<Array<{ fileName: string; type: string }>>([])
+  const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!applicationId) return
@@ -107,12 +124,35 @@ function DecisionContent() {
     return () => es.close()
   }, [applicationId])
 
+  async function handleUpload(e: React.FormEvent) {
+    e.preventDefault()
+    const file = fileRef.current?.files?.[0]
+    if (!file || !applicationId) return
+    setUploadLoading(true)
+    setUploadError('')
+    const fd = new FormData()
+    fd.append('applicationId', applicationId)
+    fd.append('docType', docType)
+    fd.append('file', file)
+    const res = await fetch('/api/documents/upload', { method: 'POST', body: fd })
+    const data = await res.json()
+    setUploadLoading(false)
+    if (!res.ok) {
+      setUploadError(data.error || 'Upload failed')
+    } else {
+      setUploadedDocs(prev => [...prev, { fileName: data.fileName, type: docType }])
+      if (fileRef.current) fileRef.current.value = ''
+    }
+  }
+
   const totalTools = Object.keys(TOOL_LABELS).length
   const completedCount = steps.filter(s => s.status === 'done').length
   const progressPct = totalTools > 0 ? (completedCount / totalTools) * 100 : 0
 
   const rec = score ? (score.recommendation as string) : null
   const recCfg = rec ? REC_CONFIG[rec] : null
+  const qualifiedMin = score ? (score.qualifiedAmountMin as number) : 0
+  const qualifiedMax = score ? (score.qualifiedAmountMax as number) : 0
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -206,9 +246,9 @@ function DecisionContent() {
         {/* Results */}
         {done && score && (
           <>
-            {/* Score + recommendation */}
+            {/* Score + recommendation + qualified amount */}
             <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-8 mb-6">
-              <div className="flex items-center gap-6 mb-8">
+              <div className="flex items-center gap-6 mb-6">
                 <div className="flex-shrink-0 w-24 h-24 rounded-full bg-slate-50 ring-8 ring-slate-100 flex flex-col items-center justify-center">
                   <div className="text-3xl font-bold text-slate-900">{score.total as number}</div>
                   <div className="text-xs text-slate-400 font-medium">/ 100</div>
@@ -223,6 +263,17 @@ function DecisionContent() {
                   )}
                 </div>
               </div>
+
+              {/* Qualified amount band */}
+              {qualifiedMin > 0 && (
+                <div className="bg-emerald-50 border border-emerald-100 rounded-xl px-5 py-4 mb-8">
+                  <div className="text-xs text-emerald-700 font-semibold uppercase tracking-wider mb-1">Pre-Qualified Amount</div>
+                  <div className="text-2xl font-bold text-emerald-800">
+                    ${qualifiedMin.toLocaleString()} &mdash; ${qualifiedMax.toLocaleString()}
+                  </div>
+                  <div className="text-xs text-emerald-600 mt-1">Based on your financial profile and underwriting score. Final amount subject to lender review.</div>
+                </div>
+              )}
 
               <div>
                 <h3 className="text-sm font-semibold text-slate-700 mb-5">Score Breakdown</h3>
@@ -257,6 +308,75 @@ function DecisionContent() {
                 <p className="text-slate-600 text-sm leading-relaxed">{score.reasoning as string}</p>
               </div>
             )}
+
+            {/* Document upload */}
+            <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-6 mb-6">
+              <h3 className="text-sm font-semibold text-slate-900 mb-1">Upload Supporting Documents</h3>
+              <p className="text-slate-500 text-sm mb-5">
+                Strengthen your application by uploading recent bank statements or tax returns. Optional but recommended.
+              </p>
+
+              <form onSubmit={handleUpload} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1.5">Document Type</label>
+                  <select
+                    value={docType}
+                    onChange={e => setDocType(e.target.value)}
+                    className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-slate-900 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  >
+                    {DOC_TYPE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1.5">File (PDF, JPG, PNG — max 10 MB)</label>
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    className="w-full text-sm text-slate-600 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 cursor-pointer"
+                  />
+                </div>
+                {uploadError && (
+                  <div className="text-sm text-red-600">{uploadError}</div>
+                )}
+                <button
+                  type="submit"
+                  disabled={uploadLoading}
+                  className="w-full border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-50 font-medium py-2.5 rounded-xl text-sm transition-colors"
+                >
+                  {uploadLoading ? 'Uploading...' : 'Upload Document'}
+                </button>
+              </form>
+
+              {uploadedDocs.length > 0 && (
+                <div className="mt-4 space-y-2">
+                  {uploadedDocs.map((doc, i) => (
+                    <div key={i} className="flex items-center gap-2 text-sm text-slate-700">
+                      <svg className="w-4 h-4 text-emerald-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                      </svg>
+                      <span className="truncate">{doc.fileName}</span>
+                      <span className="text-slate-400 text-xs ml-auto flex-shrink-0">{DOC_TYPE_OPTIONS.find(o => o.value === doc.type)?.label}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Decision chat */}
+            <DecisionChat scoreContext={{
+              total: score.total as number,
+              recommendation: score.recommendation as string,
+              qualifiedAmountMin: (score.qualifiedAmountMin as number) ?? 0,
+              qualifiedAmountMax: (score.qualifiedAmountMax as number) ?? 0,
+              cashFlow: score.cashFlow as number,
+              creditProxy: score.creditProxy as number,
+              businessHistory: score.businessHistory as number,
+              industryRisk: score.industryRisk as number,
+              loanViability: score.loanViability as number,
+              complianceFlags: score.complianceFlags as number,
+              reasoning: score.reasoning as string,
+            }} />
 
             {/* Next steps */}
             <div className="bg-white rounded-xl ring-1 ring-slate-200 p-6 text-center mb-8">

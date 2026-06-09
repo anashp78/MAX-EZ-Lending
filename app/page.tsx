@@ -1,6 +1,9 @@
 'use client'
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
+import dynamic from 'next/dynamic'
+
+const PrequalChat = dynamic(() => import('@/components/PrequalChat'), { ssr: false })
 
 function LogoMark({ size = 28 }: { size?: number }) {
   return (
@@ -34,7 +37,7 @@ const SCORE_DIMS = [
 ]
 
 const COMPLETED_STEPS = [
-  'Plaid cash flow analyzed',
+  'Financial profile analyzed',
   'SBA industry benchmarks fetched',
   'Underwriting score calculated',
 ]
@@ -120,7 +123,7 @@ function ScoreMockup() {
 }
 
 const PARTNERS = [
-  { name: 'Plaid', desc: 'Bank Connectivity', bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-700' },
+  { name: 'Claude AI', desc: 'AI Underwriting', bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-700' },
   { name: 'Lendio', desc: 'Lending Partner', bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-700' },
   { name: 'Kapitus', desc: 'Lending Partner', bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700' },
   { name: 'SBA', desc: 'Loan Data', bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-700' },
@@ -166,7 +169,7 @@ export default function HomePage() {
               Fast Capital for<br />Growing Businesses.
             </h1>
             <p className="text-slate-500 text-lg mb-10 leading-relaxed max-w-lg">
-              Connect your bank account. Our AI analyzes your cash flow, benchmarks your industry against SBA data, and routes you to the right lending partner in minutes.
+              Answer a few questions about your business. Our AI analyzes your financial profile, benchmarks your industry against SBA data, and routes you to the right lending partner in minutes.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 mb-8">
               <Link
@@ -270,11 +273,11 @@ export default function HomePage() {
               },
               {
                 step: '02',
-                title: 'Connect your bank account',
-                desc: 'Securely link your business checking via Plaid. We analyze 12 months of cash flow. Your credentials are never stored.',
+                title: 'Share your financial profile',
+                desc: 'Answer a few quick questions about your monthly revenue, expenses, and credit range. No bank login required. All data stays private.',
                 icon: (
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                   </svg>
                 ),
               },
@@ -361,6 +364,9 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* Pre-qual chat widget */}
+      <PrequalChat />
+
       {/* Footer */}
       <footer className="bg-slate-950 text-slate-400 py-12 px-6">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-start gap-8">
@@ -382,8 +388,9 @@ export default function HomePage() {
             <div>
               <div className="text-white font-medium mb-3">Company</div>
               <div className="space-y-2">
-                <div><a href="#" className="hover:text-white transition-colors">Privacy Policy</a></div>
-                <div><a href="#" className="hover:text-white transition-colors">Terms of Use</a></div>
+                <div><Link href="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link></div>
+                <div><Link href="/terms" className="hover:text-white transition-colors">Terms of Use</Link></div>
+                <div><Link href="/platform" className="hover:text-white transition-colors">Platform Architecture</Link></div>
                 <div><Link href="/login" className="hover:text-white transition-colors">Admin Login</Link></div>
               </div>
             </div>

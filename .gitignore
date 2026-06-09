@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# uploaded documents (stored on server disk, not versioned)
+/public/uploads/
+/uploads/
