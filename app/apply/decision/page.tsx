@@ -6,6 +6,16 @@ import dynamic from 'next/dynamic'
 
 const DecisionChat = dynamic(() => import('@/components/DecisionChat'), { ssr: false })
 
+function LogoMark({ size = 28 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 28 28" fill="none">
+      <rect width="28" height="28" rx="6" fill="#0f172a" />
+      <path d="M7 20L11 11L14 16L17 11L21 20" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M10 17H18" stroke="#10b981" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 const TOOL_LABELS: Record<string, string> = {
   questionnaire_analysis: 'Reviewing financial profile',
   snowflake_benchmarks: 'Fetching industry benchmarks',
@@ -159,11 +169,12 @@ function DecisionContent() {
       {/* Navbar */}
       <header className="bg-white border-b border-slate-100">
         <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <div className="w-7 h-7 bg-slate-900 rounded flex items-center justify-center">
-              <span className="text-white text-xs font-bold">ME</span>
+          <Link href="/" className="flex items-center gap-2.5">
+            <LogoMark size={28} />
+            <div className="leading-none">
+              <span className="font-bold text-slate-900 text-sm tracking-tight">MAX EV</span>
+              <span className="font-normal text-slate-500 text-sm"> Business Lending</span>
             </div>
-            <span className="font-semibold text-slate-900 text-sm">MAX EV Business Lending</span>
           </Link>
           <span className="text-slate-400 text-xs hidden sm:block">
             {done ? 'Analysis complete' : 'AI analysis running...'}
@@ -379,15 +390,58 @@ function DecisionContent() {
             }} />
 
             {/* Next steps */}
-            <div className="bg-white rounded-xl ring-1 ring-slate-200 p-6 text-center mb-8">
-              <h3 className="text-sm font-semibold text-slate-900 mb-2">What Happens Next</h3>
-              <p className="text-slate-500 text-sm">
-                {rec === 'lendio' || rec === 'kapitus'
-                  ? 'Your application has been routed to your lending partner. A specialist will contact you within 1 business day to complete the process.'
-                  : rec === 'manual_review'
-                  ? 'Your application requires additional review. Our team will be in touch within 2 business days.'
-                  : 'We were unable to match you with a lending partner at this time. You may reapply in 90 days.'}
-              </p>
+            <div className="bg-white rounded-2xl ring-1 ring-slate-200 p-6 mb-6">
+              <h3 className="text-sm font-semibold text-slate-900 mb-5">What Happens Next</h3>
+              {(rec === 'lendio' || rec === 'kapitus') && (
+                <ol className="space-y-4">
+                  {[
+                    { label: 'Application routed', desc: `Your profile has been sent to ${rec === 'lendio' ? 'Lendio' : 'Kapitus'} for formal review.` },
+                    { label: 'Specialist contact', desc: 'A lending specialist will reach out within 1 business day to verify your information.' },
+                    { label: 'Document collection', desc: 'You may be asked to provide 3–6 months of bank statements and recent tax returns.' },
+                    { label: 'Final decision & funding', desc: 'Final approval and funding typically complete within 3–10 business days after document review.' },
+                  ].map((item, i) => (
+                    <li key={i} className="flex gap-3">
+                      <div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{i + 1}</div>
+                      <div>
+                        <div className="text-sm font-semibold text-slate-800">{item.label}</div>
+                        <div className="text-xs text-slate-500 mt-0.5">{item.desc}</div>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              )}
+              {rec === 'manual_review' && (
+                <ol className="space-y-4">
+                  {[
+                    { label: 'Application flagged for review', desc: 'Your profile has been queued for manual underwriter review.' },
+                    { label: 'Team review (2 business days)', desc: 'Our team will assess your application and may request additional documentation.' },
+                    { label: 'Decision communicated', desc: 'You will receive an email with next steps or a final decision within 2 business days.' },
+                  ].map((item, i) => (
+                    <li key={i} className="flex gap-3">
+                      <div className="w-6 h-6 rounded-full bg-amber-100 text-amber-700 text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{i + 1}</div>
+                      <div>
+                        <div className="text-sm font-semibold text-slate-800">{item.label}</div>
+                        <div className="text-xs text-slate-500 mt-0.5">{item.desc}</div>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              )}
+              {rec === 'decline' && (
+                <div className="space-y-3">
+                  <p className="text-sm text-slate-600 leading-relaxed">We were unable to match your current profile with a lending partner. This is based on your profile today — not a permanent status.</p>
+                  <div className="bg-slate-50 rounded-xl p-4 space-y-2">
+                    <div className="text-xs font-semibold text-slate-700 mb-2">Common ways to improve your score</div>
+                    {['Increase monthly revenue and reduce outstanding debt', 'Build 6+ months of consistent cash flow history', 'Reduce NSF / returned check frequency', 'Allow time in business to grow past 1–2 years'].map(tip => (
+                      <div key={tip} className="flex items-start gap-2 text-xs text-slate-500">
+                        <div className="w-1 h-1 rounded-full bg-slate-400 flex-shrink-0 mt-1.5" />
+                        {tip}
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-slate-400">You may reapply in 90 days.</p>
+                </div>
+              )}
             </div>
 
             <div className="text-center">

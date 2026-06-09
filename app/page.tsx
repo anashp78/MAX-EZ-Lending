@@ -347,6 +347,54 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* FAQ */}
+      <section className="py-20 px-6 bg-slate-50">
+        <div className="max-w-3xl mx-auto">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold text-slate-900 mb-3">Common questions</h2>
+            <p className="text-slate-500">Everything you need to know before you apply.</p>
+          </div>
+          <div className="space-y-3">
+            {[
+              {
+                q: 'Will applying affect my credit score?',
+                a: 'No. Our AI pre-qualification uses only the information you provide — no credit bureau inquiry is made. A hard credit pull only occurs if you proceed to full application with a lending partner.',
+              },
+              {
+                q: 'How fast do I get a decision?',
+                a: 'The AI underwriting analysis completes in under 5 minutes. If approved and routed to a lending partner, final loan decisions typically take 1–3 business days.',
+              },
+              {
+                q: 'What loan amounts do you support?',
+                a: 'We work with loans from $25,000 to $5,000,000. The AI will determine a pre-qualified range based on your financial profile and match you to the right partner.',
+              },
+              {
+                q: 'What documents do I need to apply?',
+                a: 'None upfront. The pre-qualification only requires basic business information and self-reported financial figures. You can upload supporting documents (bank statements, tax returns) after you receive your score.',
+              },
+              {
+                q: 'What if I\'m declined?',
+                a: 'A decline reflects your profile at the time of application — not a permanent status. You can reapply after 90 days. Many factors that impact the score (time in business, credit, cash flow) improve over time.',
+              },
+              {
+                q: 'Is my data secure?',
+                a: 'Yes. All data is transmitted over TLS and sensitive fields are encrypted at rest using AES-256. We never sell your information to third parties.',
+              },
+            ].map((item, i) => (
+              <details key={i} className="group bg-white rounded-xl border border-slate-200 px-6 py-5 cursor-pointer">
+                <summary className="flex items-center justify-between text-sm font-semibold text-slate-900 list-none">
+                  {item.q}
+                  <svg className="w-4 h-4 text-slate-400 group-open:rotate-180 transition-transform flex-shrink-0 ml-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </summary>
+                <p className="mt-3 text-slate-500 text-sm leading-relaxed">{item.a}</p>
+              </details>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* CTA Banner */}
       <section className="py-20 px-6 bg-slate-900">
         <div className="max-w-3xl mx-auto text-center">
